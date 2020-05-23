@@ -22,19 +22,21 @@ class GaussianPyramid:
                 'orientations': {'0': [], '45': [], '90': [], '135': []}}
         amax = np.amax(src)
         b, g, r = cv.split(src)
-        for x in xrange(1, 9):
+        for x in range(1, 9):
             b, g, r = map(cv.pyrDown, [b, g, r])
             if x < 2:
                 continue
             buf_its = np.zeros(b.shape)
-            buf_colors = map(lambda _: np.zeros(b.shape), range(4))  # b, g, r, y
-            for y, x in itertools.product(xrange(len(b)), xrange(len(b[0]))):
+            buf_colors = list(map(lambda _: np.zeros(b.shape), range(4)))  # b, g, r, y
+            for y, x in itertools.product(range(len(b)), range(len(b[0]))):
                 buf_its[y][x] = self.__get_intensity(b[y][x], g[y][x], r[y][x])
-                buf_colors[0][y][x], buf_colors[1][y][x], buf_colors[2][y][x], buf_colors[3][y][x] = self.__get_colors(b[y][x], g[y][x], r[y][x], buf_its[y][x], amax)
+                aaaa =tuple(self.__get_colors(b[y][x], g[y][x], r[y][x], buf_its[y][x], amax))
+                buf_colors[0][y][x], buf_colors[1][y][x], buf_colors[2][y][x], buf_colors[3][y][x] = aaaa
+                #self.__get_colors(b[y][x], g[y][x], r[y][x], buf_its[y][x], amax)
             maps['intensity'].append(buf_its)
-            for (color, index) in zip(sorted(maps['colors'].keys()), xrange(4)):
+            for (color, index) in zip(sorted(maps['colors'].keys()), range(4)):
                 maps['colors'][color].append(buf_colors[index])
-            for (orientation, index) in zip(sorted(maps['orientations'].keys()), xrange(4)):
+            for (orientation, index) in zip(sorted(maps['orientations'].keys()), range(4)):
                 maps['orientations'][orientation].append(self.__conv_gabor(buf_its, np.pi * index / 4))
         return maps
 
@@ -47,7 +49,8 @@ class GaussianPyramid:
         ny = max(((r + g) / 2. - math.fabs(r - g) / 2. - b), 0.)
 
         if i != 0.0:
-            return map(lambda x: x / np.float64(i), [nb, ng, nr, ny])
+            #a =  map(lambda x: x / np.float64(i), [nb, ng, nr, ny])
+            return list(map(lambda x: x / np.float64(i), [nb, ng, nr, ny]))
         else:
             return nb, ng, nr, ny
 
@@ -73,9 +76,10 @@ class FeatureMap:
             for key in maps['orientations'].keys():
                 maps['orientations'][key].append(self.__scale_diff(srcs['orientations'][key][c], srcs['orientations'][key][s]))
             for key in maps['colors'].keys():
+                d1 = (srcs['colors'][key[0]][c], srcs['colors'][key[0]][s])
+                d2 = (srcs['colors'][key[1]][c], srcs['colors'][key[1]][s])
                 maps['colors'][key].append(self.__scale_color_diff(
-                    (srcs['colors'][key[0]][c], srcs['colors'][key[0]][s]),
-                    (srcs['colors'][key[1]][c], srcs['colors'][key[1]][s])
+                    d1,d2
                 ))
         return maps
 
@@ -83,7 +87,9 @@ class FeatureMap:
         c_size = tuple(reversed(c.shape))
         return cv.absdiff(c, cv.resize(s, c_size, None, 0, 0, cv.INTER_NEAREST))
 
-    def __scale_color_diff(self, (c1, s1), (c2, s2)):
+    def __scale_color_diff(self, d1, d2):
+        c1, s1 = d1
+        c2, s2 = d2
         c_size = tuple(reversed(c1.shape))
         return cv.absdiff(c1 - c2, cv.resize(s2 - s1, c_size, None, 0, 0, cv.INTER_NEAREST))
 
@@ -94,16 +100,17 @@ class ConspicuityMap:
 
     def __make_conspicuity_map(self, srcs):
         util = Util()
-        intensity = self.__scale_add(map(util.normalize, srcs['intensity']))
+        intensity = self.__scale_add(list(map(util.normalize, srcs['intensity'])))
         for key in srcs['colors'].keys():
-            srcs['colors'][key] = map(util.normalize, srcs['colors'][key])
-        color = self.__scale_add([srcs['colors']['bg'][x] + srcs['colors']['ry'][x] for x in xrange(len(srcs['colors']['bg']))])
+            srcs['colors'][key] = list(map(util.normalize, srcs['colors'][key]))
+        color = self.__scale_add([srcs['colors']['bg'][x] + srcs['colors']['ry'][x] for x in range(len(srcs['colors']['bg']))])
         orientation = np.zeros(intensity.shape)
         for key in srcs['orientations'].keys():
-            orientation += self.__scale_add(map(util.normalize, srcs['orientations'][key]))
+            orientation += self.__scale_add(list(map(util.normalize, srcs['orientations'][key])))
         return {'intensity': intensity, 'color': color, 'orientation': orientation}
 
     def __scale_add(self, srcs):
+        srcs = list(srcs)
         buf = np.zeros(srcs[0].shape)
         for x in srcs:
             buf += cv.resize(x, tuple(reversed(buf.shape)))
@@ -119,5 +126,5 @@ class SaliencyMap:
 
     def __make_saliency_map(self, srcs):
         util = Util()
-        srcs = map(util.normalize, [srcs[key] for key in srcs.keys()])
+        srcs = list(map(util.normalize, [srcs[key] for key in srcs.keys()]))
         return srcs[0] / 3. + srcs[1] / 3. + srcs[2] / 3.
